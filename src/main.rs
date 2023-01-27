@@ -10,7 +10,7 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("Failed to connect to database");
 
-    let listener = TcpListener::bind(&format!("127.0.0.1:{}", config.app_port))
+    let listener = TcpListener::bind(format!("127.0.0.1:{}", config.app_port))
         .expect("Failed to bind to port");
 
     run(listener, connection_pool)?.await
