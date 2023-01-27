@@ -105,9 +105,10 @@ jobs:
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
         with:
-          components: clippy
+          profile: minimal
           toolchain: stable
           override: true
+      - run: rustup component add clippy
 
       - name: Cache sqlx-cli
         uses: actions/cache@v2
@@ -134,14 +135,11 @@ jobs:
           sudo apt-get install libpq-dev -y
           SKIP_DOCKER=true ./scripts/init_db.sh
       - name: Run clippy
-        uses: actions-rs/clippy-check@v1
+        uses: actions-rs/cargo@v1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          command: clippy
           args: -- -D warnings
           
-          
-          
-
   coverage:
     name: Code coverage
     runs-on: ubuntu-latest
@@ -195,4 +193,4 @@ jobs:
         uses: actions-rs/tarpaulin@v0.1
         with:
           version: '0.15.0'
-          args: '-- --test-threads 1 --ignore-tests --avoid-cfg-tarpaulin'
+          args: '--ignore-tests --avoid-cfg-tarpaulin'
