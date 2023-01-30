@@ -1,6 +1,24 @@
+use once_cell::sync::Lazy;
+use secrecy::ExposeSecret;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::net::TcpListener;
-use zero2prod::config::DatabaseSettings;
+use uuid::Uuid;
+use zero2prod::config::{get_config, DatabaseSettings};
+use zero2prod::startup::run;
+use zero2prod::telemetry::{get_subscriber, init_subscriber};
+
+static TRACING: Lazy<()> = Lazy::new(|| {
+    let default_filter_level = "info".to_string();
+    let subscriber_name = "test".to_string();
+
+    if std::env::var("TEST_LOG").is_ok() {
+        let subscriber = get_subscriber(subscriber_name, default_filter_level, std::io::stdout);
+        init_subscriber(subscriber);
+    } else {
+        let subscriber = get_subscriber(subscriber_name, default_filter_level, std::io::sink);
+        init_subscriber(subscriber);
+    }
+});
 
 pub struct TestApp {
     pub address: String,
@@ -9,21 +27,22 @@ pub struct TestApp {
 
 // create a instance of our app for testing
 async fn spawn_app() -> TestApp {
+    Lazy::force(&TRACING);
+
     // bind to a random port
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind to random port");
     let port = listener.local_addr().unwrap().port();
     let address = format!("http://127.0.0.1:{}", port);
 
     // get config and set the db name to a random string
-    let mut config = zero2prod::config::get_config().expect("Failed to get config");
-    config.database.database_name = uuid::Uuid::new_v4().to_string();
+    let mut config = get_config().expect("Failed to get config");
+    config.database.database_name = Uuid::new_v4().to_string();
 
     // get connection pool for the newly create db
     let db_pool = configure_database(&config.database).await;
 
     // builds the app but isn't executed yet?
-    let server =
-        zero2prod::startup::run(listener, db_pool.clone()).expect("Failed to bind address");
+    let server = run(listener, db_pool.clone()).expect("Failed to bind address");
 
     // spawn create a new async task and excutes the app function
     let _ = tokio::spawn(server);
@@ -34,9 +53,10 @@ async fn spawn_app() -> TestApp {
 // create a fresh database and run migrations on it
 pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
     // make a single connection
-    let mut connection = PgConnection::connect(&config.connection_string_without_db())
-        .await
-        .expect("Failed to connect to postgres");
+    let mut connection =
+        PgConnection::connect(&config.connection_string_without_db().expose_secret())
+            .await
+            .expect("Failed to connect to postgres");
 
     // create db
     connection
@@ -45,7 +65,7 @@ pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
         .expect("Failed to create database");
 
     // create a pool for that db
-    let pool = PgPool::connect(&config.connection_string())
+    let pool = PgPool::connect(&config.connection_string().expose_secret())
         .await
         .expect("Failed to connect to postgres");
 

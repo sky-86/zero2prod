@@ -1,7 +1,6 @@
 use actix_web::{web, HttpResponse, Responder};
 use chrono::Utc;
 use sqlx::PgPool;
-use tracing::Instrument;
 use uuid::Uuid;
 
 #[derive(serde::Deserialize)]
@@ -10,21 +9,27 @@ pub struct FormData {
     name: String,
 }
 
-// POST /subscriptions
-// inserts the user into the db
-pub async fn subscribe(form: web::Form<FormData>, pool: web::Data<PgPool>) -> impl Responder {
-    let request_id = Uuid::new_v4();
-
-    let request_span = tracing::info_span!(
-        "Adding a new subscriber.",
-        %request_id,
+#[tracing::instrument(
+    name = "Adding a new subscriber",
+    skip(form, pool),
+    fields(
         subscriber_email = %form.email,
-        subscriber_name = %form.name
-    );
-    let _request_span_guard = request_span.enter();
+        subscriber_name = &form.name
+    )
+)]
+pub async fn subscribe(form: web::Form<FormData>, pool: web::Data<PgPool>) -> impl Responder {
+    match insert_subscriber(&pool, &form).await {
+        Ok(_) => HttpResponse::Ok(),
+        Err(_e) => HttpResponse::InternalServerError(),
+    }
+}
 
-    let query_span = tracing::info_span!("Saving new subscriber's details in the database",);
-    match sqlx::query!(
+#[tracing::instrument(
+    name = "Saving new subscriber details in the database",
+    skip(form, pool)
+)]
+pub async fn insert_subscriber(pool: &PgPool, form: &FormData) -> Result<(), sqlx::Error> {
+    let result = sqlx::query!(
         r#"
         INSERT INTO subscriptions (id, email, name, subscribed_at)
         VALUES ($1, $2, $3, $4)
@@ -34,14 +39,13 @@ pub async fn subscribe(form: web::Form<FormData>, pool: web::Data<PgPool>) -> im
         form.name,
         Utc::now()
     )
-    .execute(pool.get_ref())
-    .instrument(query_span)
+    .execute(pool)
     .await
-    {
-        Ok(_) => HttpResponse::Ok(),
-        Err(e) => {
-            tracing::error!("Failed to execute query: {:?}", e);
-            HttpResponse::InternalServerError()
-        }
+    .map_err(|e| {
+        tracing::error!("Failed to executue query: {:?}", e);
+    });
+    match result {
+        Ok(_) => Ok(()),
+        Err(_) => panic!("Error in insert_subscriber"),
     }
 }
