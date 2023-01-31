@@ -1,8 +1,32 @@
+//use opentelemetry::sdk::export::trace::stdout;
 use tracing::{subscriber::set_global_default, Subscriber};
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 use tracing_log::LogTracer;
 use tracing_subscriber::fmt::MakeWriter;
 use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
+
+// pub fn get_otel_subscriber(_name: String, env_filter: String) -> impl Subscriber + Send + Sync {
+//     let otlp_exporter = opentelemetry_otlp::new_exporter().tonic();
+//     // Create a new OpenTelemetry pipeline
+//     let tracer = opentelemetry_otlp::new_pipeline()
+//         .tracing()
+//         .with_exporter(otlp_exporter)
+//         .install_simple()
+//         .expect("Error creating tracer");
+//
+//     // Create a tracing layer with the configured tracer
+//     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+//
+//     let env_filter =
+//         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(env_filter));
+//
+//     //let formatting_layer = BunyanFormattingLayer::new(name, sink);
+//
+//     Registry::default()
+//         .with(env_filter)
+//         .with(JsonStorageLayer)
+//         .with(telemetry)
+// }
 
 pub fn get_subscriber<Sink>(
     name: String,
